@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from datetime import date
 import crud, models, schemas
 from database import SessionLocal, engine, Base
+from typing import List, Optional
+from utils import calculate_xp_for_workout, xp_to_next_level, calculate_level, should_reset_streak, XP_PER_WORKOUT, XP_FOR_DAILY_CHECKIN
 
 # Create tables
 Base.metadata.create_all(bind=engine)

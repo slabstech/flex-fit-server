@@ -173,3 +173,37 @@ def get_leaderboard(db: Session = Depends(get_db)):
             streak_count=u.streak_count
         ) for u in users
     ]
+
+# === DASHBOARD ENDPOINT ===
+@app.get("/dashboard/", response_model=schemas.UserPublic)
+def get_dashboard(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns complete user profile for the dashboard:
+    - username, level, xp, streak, total_workouts
+    - plus any earned badges (bonus!)
+    """
+    # Fetch earned badges with details
+    earned_badges = [
+        schemas.BadgeResponse(
+            name=b.badge.name,
+            description=b.badge.description,
+            icon_url=b.badge.icon_url,
+            earned_at=b.earned_at
+        )
+        for b in current_user.user_badges
+    ]
+
+    return schemas.UserPublic(
+        id=current_user.id,
+        username=current_user.username,
+        email=current_user.email,
+        level=current_user.level,
+        xp=current_user.xp,
+        streak_count=current_user.streak_count,
+        total_workouts=current_user.total_workouts,
+        # Add badges if you want (optional extra)
+        # badges=earned_badges
+    )

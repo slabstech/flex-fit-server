@@ -1,4 +1,9 @@
-uvicorn
 fastapi
+uvicorn
 sqlalchemy
 psycopg2-binary
+pydantic[email]
+bcrypt==4.1.3
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]
+python-multipart

@@ -70,38 +70,36 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     return user
 
 
-# === Routes ===
-
-@app.post("/register/", response_model=schemas.UserPublic, status_code=201)
-def register_user(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
-    # Check if user exists
-    if db.query(models.User).filter(models.User.email == user_in.email).first():
-        raise HTTPException(400, "Email already registered")
-    if db.query(models.User).filter(models.User.username == user_in.username).first():
-        raise HTTPException(400, "Username already taken")
-
-    hashed_password = get_password_hash(user_in.password)
-    user = models.User(
-        email=user_in.email,
-        username=user_in.username,
-        hashed_password=hashed_password,
-    )
-    db.add(user)
+# === Registration ===
+@app.post("/register/", response_model=schemas.UserPublic)
+def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    hashed_password = get_password_hash(user.password)
+    db_user = models.User(email=user.email, username=user.username, hashed_password=hashed_password)
+    db.add(db_user)
     db.commit()
-    db.refresh(user)
-    return user
+    db.refresh(db_user)
+    return db_user
 
 
+# === Login ===
 @app.post("/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.email == form_data.username).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(401, "Incorrect email or password")
-
-    access_token = create_access_token(data={"sub": str(user.id)})
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(data={"sub": user.id}, expires_delta=access_token_expires)
     return {"access_token": access_token, "token_type": "bearer"}
 
 
+# === Workout Logging ===
 @app.post("/workouts/", response_model=schemas.WorkoutResponse)
 def log_workout(
     workout: schemas.WorkoutCreate,
@@ -207,3 +205,22 @@ def get_dashboard(
         # Add badges if you want (optional extra)
         # badges=earned_badges
     )
+
+# === WORKOUT HISTORY ENDPOINT ===
+@app.get("/workouts/history/", response_model=List[schemas.WorkoutResponse])
+def get_workout_history(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    workouts = db.query(models.Workout).filter(models.Workout.user_id == current_user.id).order_by(models.Workout.created_at.desc()).all()
+    return [
+        schemas.WorkoutResponse(
+            id=w.id,
+            workout_type=w.workout_type,
+            duration_min=w.duration_min,
+            calories=w.calories,
+            created_at=w.created_at,
+            # Add gamification if needed, but since it's history, keep basic or calculate on fly
+            # For simplicity, omit gamification or set empty
+        ) for w in workouts
+    ]

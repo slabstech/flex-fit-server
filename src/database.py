@@ -15,7 +15,7 @@ SQLALCHEMY_DATABASE_URL = os.getenv(
 if os.getenv("USE_LOCALHOST_DB"):
     SQLALCHEMY_DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/fitness"
 
-SQLALCHEMY_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/fitness"
+#SQLALCHEMY_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/fitness"
 
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

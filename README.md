@@ -6,3 +6,6 @@ pip install -r requirements.txt
 
 cd src
 uvicorn main:app --reload
+
+
+docker build -t dwani/flex-fit-api -f Dockerfile .

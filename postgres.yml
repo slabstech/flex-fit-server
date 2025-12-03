@@ -28,6 +28,18 @@ services:
     depends_on:
       - db
 
+  api:
+    container_name: flex-fit-api
+    image: dwani/flex-fit-api:latest
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@localhost:5432/fitness
+    depends_on:
+      db:
+        condition: service_healthy
+
+
 volumes:
   postgres_data:
   pgadmin_data:

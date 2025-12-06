@@ -8,12 +8,14 @@ import qrcode
 from io import BytesIO
 import hashlib
 
+from fastapi import FastAPI, Depends, HTTPException, Request
 import models
 from database import engine, SessionLocal
-from schemas import AttendanceCreate, AttendanceResponse
+from schemas import AttendanceDaily, AttendanceResponse, AttendanceCreate
+
 
 templates = Jinja2Templates(directory="templates")
-Base.metadata.create_all(bind=engine)
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Daily QR Attendance System")
 
@@ -37,7 +39,7 @@ def get_today_code() -> str:
     today = date.today().isoformat()
     return f"ATTEND-{today}"
 
-# Optional: Add secret salt for extra security
+# Optional: Add secret salt for extra security (uncomment if needed)
 # def get_today_code() -> str:
 #     today = date.today().isoformat()
 #     secret = "my-school-secret-2025"
@@ -83,26 +85,12 @@ def get_qr_image():
 
     return StreamingResponse(buffer, media_type="image/png")
 
-# MARK ATTENDANCE – Now checks daily code + one per day per student
+# Deprecated: Old attendance endpoint
 @app.post("/attendance", response_model=AttendanceResponse)
 def mark_attendance(payload: AttendanceCreate, db: Session = Depends(get_db)):
-    scanned_code = payload.student_id.strip()  # We reuse student_id field for QR content
-    today_code = get_today_code()
+    raise HTTPException(status_code=400, detail="Use /attendance2 endpoint")
 
-    if scanned_code != today_code:
-        raise HTTPException(status_code=400, detail="Invalid or expired QR code")
-
-    # Find student by actual student_id (you can pass it separately or embed in app)
-    # For now, we'll assume you send real student_id in a new field
-    # Let's fix the schema – we'll accept both
-
-    raise HTTPException(status_code=400, detail="Use new /attendance2 endpoint")
-
-# NEW BETTER ENDPOINT
-class AttendanceDaily(BaseModel):
-    student_id: str      # real student ID like STD001
-    qr_code: str         # the scanned daily code
-
+# MARK ATTENDANCE – Checks daily code + one per day per student
 @app.post("/attendance2", response_model=AttendanceResponse)
 def mark_attendance_daily(payload: AttendanceDaily, db: Session = Depends(get_db)):
     if payload.qr_code != get_today_code():
@@ -131,3 +119,19 @@ def mark_attendance_daily(payload: AttendanceDaily, db: Session = Depends(get_db
         student_name=student.name,
         timestamp=attendance.timestamp
     )
+
+# Optional: Add test students
+@app.post("/add-test-students")
+def add_test_students(db: Session = Depends(get_db)):
+    test_students = [
+        {"student_id": "STD001", "name": "Alice Johnson"},
+        {"student_id": "STD002", "name": "Bob Smith"},
+        {"student_id": "STD003", "name": "Carol Lee"},
+        {"student_id": "STD004", "name": "David Kim"},
+        {"student_id": "STD005", "name": "Emma Wilson"},
+    ]
+    for s in test_students:
+        if not db.query(models.Student).filter(models.Student.student_id == s["student_id"]).first():
+            db.add(models.Student(**s))
+    db.commit()
+    return {"message": "Test students added"}

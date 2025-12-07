@@ -1,4 +1,3 @@
-# docker-compose.yml
 version: '3.9'
 
 services:
@@ -9,15 +8,9 @@ services:
     ports:
       - "80:8000"
     volumes:
-      - db-data:/app           # This mounts the whole folder with correct permissions
+      - ./data:/app                    # All files (including DB) saved on host
     environment:
       - PYTHONUNBUFFERED=1
-    networks:
-      - attendance-net
 
 volumes:
-  db-data:                       # Named volume = persistent + correct permissions
-
-networks:
-  attendance-net:
-    driver: bridge
+  data:

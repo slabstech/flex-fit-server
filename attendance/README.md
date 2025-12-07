@@ -19,3 +19,13 @@ http://your-ip:8000/today-qr
 
 http://localhost:8000/add-test-students
 
+
+
+# 1. Clone / go into your project folder
+cd attendance-server
+
+# 2. Build and start (first time)
+docker compose up --build -d
+
+# 3. Subsequent runs (just start)
+docker compose up -d

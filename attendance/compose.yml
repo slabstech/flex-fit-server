@@ -1,3 +1,4 @@
+# docker-compose.yml
 version: '3.9'
 
 services:
@@ -6,14 +7,16 @@ services:
     container_name: daily-qr-attendance
     restart: unless-stopped
     ports:
-      - "80:8000"                 # Access from phone/PC: http://your-ip:8000
+      - "80:8000"
     volumes:
-      - ./attendance.db:/app/attendance.db     # Persist database
-      - ./templates:/app/templates             # Hot reload templates (optional)
+      - db-data:/app           # This mounts the whole folder with correct permissions
     environment:
       - PYTHONUNBUFFERED=1
     networks:
       - attendance-net
+
+volumes:
+  db-data:                       # Named volume = persistent + correct permissions
 
 networks:
   attendance-net:

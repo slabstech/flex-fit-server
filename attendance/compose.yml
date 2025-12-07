@@ -6,7 +6,7 @@ services:
     container_name: daily-qr-attendance
     restart: unless-stopped
     ports:
-      - "8000:8000"                 # Access from phone/PC: http://your-ip:8000
+      - "80:8000"                 # Access from phone/PC: http://your-ip:8000
     volumes:
       - ./attendance.db:/app/attendance.db     # Persist database
       - ./templates:/app/templates             # Hot reload templates (optional)

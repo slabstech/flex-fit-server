@@ -29,3 +29,10 @@ docker compose up --build -d
 
 # 3. Subsequent runs (just start)
 docker compose up -d
+
+
+curl -X POST "http://192.168.1.50:8000/add-test-students" -H "Content-Type: application/json"
+
+curl -X POST "http://your-pc-ip:8000/add-student" \
+     -H "Content-Type: application/json" \
+     -d '{"student_id": "STD999", "name": "Sachin Kumar"}'

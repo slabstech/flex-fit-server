@@ -1,16 +1,13 @@
-version: '3.9'
-
+# docker-compose.yml
 services:
-  attendance-api:
+  attendance-app:
     build: .
-    container_name: daily-qr-attendance
+    container_name: qr-attendance-system
     restart: unless-stopped
     ports:
       - "80:8000"
-    volumes:
-      - ./data:/app                    # All files (including DB) saved on host
-    environment:
-      - PYTHONUNBUFFERED=1
+    # ← NO VOLUMES AT ALL → fresh DB on every restart
 
-volumes:
-  data:
+networks:
+  default:
+    driver: bridge

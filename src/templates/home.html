@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Daily QR Attendance</title>
+    <style>
+        body { font-family: Arial; text-align: center; padding: 50px; background: #e3f2fd; }
+        .box { background: white; padding: 40px; border-radius: 20px; display: inline-block; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        img { width: 350px; height: 350px; margin: 20px; border: 3px solid #1976d2; border-radius: 15px; }
+        h1 { color: #1976d2; }
+        code { background: #f0f0f0; padding: 10px 20px; font-size: 24px; border-radius: 15px; }
+    </style>
+</head>
+<body>
+<div class="box">
+    <h1>Today's Attendance QR Code</h1>
+    <p><strong>{{ date }}</strong></p>
+    <img src="/qr-image" alt="Today's QR">
+    <p>Code: <code>{{ today_code }}</code></p>
+    <p>Show this on projector or TV</p>
+    <br>
+    <a href="/today-qr">Large Screen View</a>
+</div>
+</body>
+</html>

@@ -14,6 +14,20 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
+from io import BytesIO
+from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session
+from datetime import datetime, date, timedelta
+import qrcode
+
+from schemas import AttendanceDaily, AttendanceResponse, AttendanceCreate
+
+templates = Jinja2Templates(directory="templates")
+
+
 # === Security Setup ===
 SECRET_KEY = "your-super-secret-jwt-key-change-in-production!!!"  # Use env var!
 ALGORITHM = "HS256"
@@ -70,38 +84,36 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     return user
 
 
-# === Routes ===
-
-@app.post("/register/", response_model=schemas.UserPublic, status_code=201)
-def register_user(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
-    # Check if user exists
-    if db.query(models.User).filter(models.User.email == user_in.email).first():
-        raise HTTPException(400, "Email already registered")
-    if db.query(models.User).filter(models.User.username == user_in.username).first():
-        raise HTTPException(400, "Username already taken")
-
-    hashed_password = get_password_hash(user_in.password)
-    user = models.User(
-        email=user_in.email,
-        username=user_in.username,
-        hashed_password=hashed_password,
-    )
-    db.add(user)
+# === Registration ===
+@app.post("/register/", response_model=schemas.UserPublic)
+def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    hashed_password = get_password_hash(user.password)
+    db_user = models.User(email=user.email, username=user.username, hashed_password=hashed_password)
+    db.add(db_user)
     db.commit()
-    db.refresh(user)
-    return user
+    db.refresh(db_user)
+    return db_user
 
 
+# === Login ===
 @app.post("/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.email == form_data.username).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(401, "Incorrect email or password")
-
-    access_token = create_access_token(data={"sub": str(user.id)})
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(data={"sub": user.id}, expires_delta=access_token_expires)
     return {"access_token": access_token, "token_type": "bearer"}
 
 
+# === Workout Logging ===
 @app.post("/workouts/", response_model=schemas.WorkoutResponse)
 def log_workout(
     workout: schemas.WorkoutCreate,
@@ -173,3 +185,150 @@ def get_leaderboard(db: Session = Depends(get_db)):
             streak_count=u.streak_count
         ) for u in users
     ]
+
+# === DASHBOARD ENDPOINT ===
+@app.get("/dashboard/", response_model=schemas.UserPublic)
+def get_dashboard(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns complete user profile for the dashboard:
+    - username, level, xp, streak, total_workouts
+    - plus any earned badges (bonus!)
+    """
+    # Fetch earned badges with details
+    earned_badges = [
+        schemas.BadgeResponse(
+            name=b.badge.name,
+            description=b.badge.description,
+            icon_url=b.badge.icon_url,
+            earned_at=b.earned_at
+        )
+        for b in current_user.user_badges
+    ]
+
+    return schemas.UserPublic(
+        id=current_user.id,
+        username=current_user.username,
+        email=current_user.email,
+        level=current_user.level,
+        xp=current_user.xp,
+        streak_count=current_user.streak_count,
+        total_workouts=current_user.total_workouts,
+        # Add badges if you want (optional extra)
+        # badges=earned_badges
+    )
+
+# === WORKOUT HISTORY ENDPOINT ===
+@app.get("/workouts/history/", response_model=List[schemas.WorkoutResponse])
+def get_workout_history(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    workouts = db.query(models.Workout).filter(models.Workout.user_id == current_user.id).order_by(models.Workout.created_at.desc()).all()
+    return [
+        schemas.WorkoutResponse(
+            id=w.id,
+            workout_type=w.workout_type,
+            duration_min=w.duration_min,
+            calories=w.calories,
+            created_at=w.created_at,
+            # Add gamification if needed, but since it's history, keep basic or calculate on fly
+            # For simplicity, omit gamification or set empty
+        ) for w in workouts
+    ]
+
+def get_today_code() -> str:
+    today = date.today().isoformat()
+    return f"ATTEND-{today}"
+
+@app.get("/attend", response_class=HTMLResponse)
+def home(request: Request):
+    today_code = get_today_code()
+    return templates.TemplateResponse("home.html", {
+        "request": request,
+        "today_code": today_code,
+        "date": date.today().strftime("%A, %B %d, %Y")
+    })
+
+@app.get("/today-qr", response_class=HTMLResponse)
+def today_qr_page(request: Request):
+    code = get_today_code()
+    return templates.TemplateResponse("today_qr.html", {
+        "request": request,
+        "code": code,
+        "date": date.today().strftime("%d %B %Y"),
+        "day": date.today().strftime("%A")
+    })
+
+# API: Get today's code as JSON (for Android app if needed)
+@app.get("/api/today-code")
+def api_today_code():
+    return {"code": get_today_code(), "date": date.today().isoformat()}
+
+# Raw QR Image
+@app.get("/qr-image")
+def get_qr_image():
+    code = get_today_code()
+    qr = qrcode.QRCode(version=1, box_size=20, border=4)
+    qr.add_data(code)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+
+    buffer = BytesIO()
+    img.save(buffer, format="PNG")
+    buffer.seek(0)
+
+    return StreamingResponse(buffer, media_type="image/png")
+
+# Deprecated: Old attendance endpoint
+@app.post("/attendance", response_model=AttendanceResponse)
+def mark_attendance(payload: AttendanceCreate, db: Session = Depends(get_db)):
+    raise HTTPException(status_code=400, detail="Use /attendance2 endpoint")
+
+# MARK ATTENDANCE – Checks daily code + one per day per student
+@app.post("/attendance2", response_model=AttendanceResponse)
+def mark_attendance_daily(payload: AttendanceDaily, db: Session = Depends(get_db)):
+    if payload.qr_code != get_today_code():
+        raise HTTPException(status_code=400, detail="QR code is expired or invalid")
+
+    student = db.query(models.Student).filter(models.Student.student_id == payload.student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    # Check if already attended today
+    today_start = datetime.combine(date.today(), datetime.min.time())
+    already = db.query(models.Attendance).filter(
+        models.Attendance.student_id == payload.student_id,
+        models.Attendance.timestamp >= today_start
+    ).first()
+
+    if already:
+        raise HTTPException(status_code=400, detail="Already marked attendance today")
+
+    attendance = models.Attendance(student_id=payload.student_id)
+    db.add(attendance)
+    db.commit()
+
+    return AttendanceResponse(
+        message="Attendance marked successfully!",
+        student_name=student.name,
+        timestamp=attendance.timestamp
+    )
+
+# Optional: Add test students
+@app.post("/add-test-students")
+def add_test_students(db: Session = Depends(get_db)):
+    test_students = [
+        {"student_id": "STD001", "name": "Alice Johnson"},
+        {"student_id": "STD002", "name": "Bob Smith"},
+        {"student_id": "STD003", "name": "Carol Lee"},
+        {"student_id": "STD004", "name": "David Kim"},
+        {"student_id": "STD005", "name": "Emma Wilson"},
+    ]
+    for s in test_students:
+        if not db.query(models.Student).filter(models.Student.student_id == s["student_id"]).first():
+            db.add(models.Student(**s))
+    db.commit()
+    return {"message": "Test students added"}

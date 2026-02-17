@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SCAN NOW - {{ date }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { margin: 0; padding: 0; height: 100vh; background: black; color: white; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        img { width: 80vmin; height: 80vmin; }
+        h1 { font-size: 8vmin; margin: 5px; }
+        p { font-size: 5vmin; }
+    </style>
+</head>
+<body>
+    <h1>{{ day }}</h1>
+    <h1>{{ date }}</h1>
+    <img src="/qr-image" alt="Scan Me">
+    <p>Scan to mark attendance</p>
+</body>
+</html>
